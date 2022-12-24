@@ -1,0 +1,29 @@
+# My env
+.env
+
+# Pycache files
+__pycache__
+
+# Handlers
+.handler-saves
+
+# My scratch file
+scratch.py
+
+# Ssh folder
+ssh-key
+
+# DS_Store
+.DS_Store
+
+# Poetry lock
+poetry.lock
+
+# Tests folder
+tests
+
+# Pytest cache
+.pytest_cache
+
+# setup info
+crypto_impact_bot.egg-info
