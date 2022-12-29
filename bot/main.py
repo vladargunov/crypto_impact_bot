@@ -1,28 +1,32 @@
 import os
 
-from dotenv import load_dotenv
-import telebot
-from telebot import types
 import time
-from init_bot import bot
+
 from utils.response_template import (
-    ask_threshold_values,
     generate_price_monitor_response,
 )
 from utils.database_manipulation import (
     retrieve_latest_prices,
     retrieve_prices_n_minutes_back,
     retrieve_latest_news,
-    add_user,
-    get_monitor_state,
-    change_monitor_state,
 )
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler,CallbackQueryHandler
 
-@bot.message_handler(commands=["start", "help"])
-@bot.message_handler(func=lambda msg: msg.text is not None and "/" not in msg.text)
-def welcome(message):
-    add_user(message.chat.id)
+from dotenv import load_dotenv
+
+# Load env parameters
+load_dotenv()
+
+API_KEY = os.getenv("API_KEY")  # from .env
+
+updater = Updater(token=API_KEY, use_context=True)
+dispatcher = updater.dispatcher
+
+# Welcome message
+def start(update, context):
+    chat_id = update.effective_chat.id
     welcome_message = (
         "Welcome to the Crypto Impact Bot!\nBy using me you can track crypto prices  " + \
 		"and news, as well as get notifications when various crypto coins move significantly.\n\n" + \
@@ -30,64 +34,108 @@ def welcome(message):
 		"/get_latest_prices to get latest prices for BTC, ETH, and XRP\n" + \
 		"/get_latest_news to get the latest news article about crypto\n" + \
 		"/start_monitoring_crypto to monitor prices of crypto coins and getting notified if their returns move above threshold\n" + \
-		"/stop_monitoring_crypto to stop monitoring prices" + \
 		"Please note that I am still in development and sometimes might produce some weird results. For any bugs please contact my creator at:\n" + \
 		"argunovvlad5@gmail.com"
     )
-    bot.send_message(message.chat.id, welcome_message, allow_sending_without_reply=True)
+    context.bot.send_message(chat_id=chat_id, text=welcome_message)
 
 
 ### Get latest data ###
 #########################################
-@bot.message_handler(commands=["get_latest_prices"])
-def get_prices(message):
-    out_message, out_data = retrieve_latest_prices()
-    bot.send_message(message.chat.id, out_message, allow_sending_without_reply=True)
+
+def get_latest_prices(update, context):
+    chat_id = update.effective_chat.id
+    out_message, _ = retrieve_latest_prices()
+    context.bot.send_message(chat_id=chat_id, text=out_message)
 
 
-@bot.message_handler(commands=["get_latest_news"])
-def get_news(message):
+def get_latest_news(update, context):
+    chat_id = update.effective_chat.id
     out_message = retrieve_latest_news()
-    bot.send_message(message.chat.id, out_message, allow_sending_without_reply=True)
+    context.bot.send_message(chat_id=chat_id, text=out_message)
 
+# #########################################
 
-#########################################
+# ### Monitor Large Changes in assets ###
+# #########################################
+def start_monitoring_crypto(update, context):
+    """Starts the conversation and asks the user about their gender."""
+    # Setting threshold value
+    keyboard = [
+        [
+            InlineKeyboardButton("0 %", callback_data='0 p'),
+            InlineKeyboardButton("0.1 %", callback_data='0.1 p'),
+            InlineKeyboardButton("0.5 %", callback_data='0.5 p'),
+            InlineKeyboardButton("1 %", callback_data='1 p'),
+        ]
+    ]
 
-### Monitor Large Changes in assets ###
-#########################################
-@bot.message_handler(commands=["start_monitoring_crypto"])
-def monitor_price_changes(message):
-    ask_threshold_values(message.chat.id, "What threshold value do you wish to set?")
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-
-@bot.message_handler(commands=["stop_monitoring_crypto"])
-def monitor_price_changes(message):
-    change_monitor_state(message.chat.id, 0)
-
-
-@bot.callback_query_handler(
-    func=lambda call: call.data
-    in ["0 percent", "0.1 percent", "0.5 percent", "1 percent"]
-)
-def callback_handler(call):
-    threshold_value = float(call.data.split()[0])
-    bot.send_message(
-        call.message.chat.id,
-        f"You have chosen {call.data} threshold.\nMonitoring has started!\nYou will be notified if the return of any coin exceeds the return specified by you over the last 10 minutes.",
-
+    update.message.reply_text(
+        "What threshold value do you wish to set?",
+        reply_markup=reply_markup
     )
-    change_monitor_state(call.message.chat.id, 1)
-    while get_monitor_state(call.message.chat.id) == 1:
-        prev_message, previous_prices = retrieve_prices_n_minutes_back(n_minutes=10)
-        latest_message, latest_prices = retrieve_latest_prices()
-        notify_user, out_message = generate_price_monitor_response(
-            previous_prices, latest_prices, threshold_value, time_interval=10
+
+    # Setting time interval value
+    keyboard = [
+        [
+            InlineKeyboardButton("1 minute", callback_data='1 m'),
+            InlineKeyboardButton("2 minutes", callback_data='2 m'),
+            InlineKeyboardButton("5 minutes", callback_data='5 m'),
+            InlineKeyboardButton("10 minutes", callback_data='10 m'),
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    update.message.reply_text(
+        "What time interval value do you wish to set?",
+        reply_markup=reply_markup
+    )
+
+
+def callback_reply(update, context):
+    """
+    Store context provided by user
+    """
+    query = update.callback_query
+    if query.data in ['0 p', '0.1 p', '0.5 p', '1 p']:
+        # Store value of threshold
+        context.user_data['threshold'] = float(query.data.split()[0])
+        query.edit_message_text(
+            f"You have chosen {context.user_data['threshold']} % price threshold.\n Please also set time interval below."
         )
-        if notify_user:
-            bot.send_message(call.message.chat.id, out_message, time.sleep(60))
+    elif query.data in ['1 m', '2 m', '5 m', '10 m']:
+        # Store value of time interval
+        context.user_data['time_interval'] = int(query.data.split()[0])
+        query.edit_message_text(
+            f"You have chosen {context.user_data['time_interval']} % time interval.\n Call command /check_movement to see latest updates."
+        )
 
 
-#########################################
+
+def check_movement(update, context):
+    chat_id = update.effective_chat.id
+    _, previous_prices = retrieve_prices_n_minutes_back(n_minutes=10)
+    _, latest_prices = retrieve_latest_prices()
+    out_message = generate_price_monitor_response(
+        previous_prices, 
+        latest_prices, 
+        context.user_data['threshold'], 
+        time_interval=context.user_data['time_interval']
+    )
+
+    context.bot.send_message(chat_id, out_message)
+# #########################################
 
 
-bot.infinity_polling()
+# Set the commands
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("get_latest_prices", get_latest_prices))
+dispatcher.add_handler(CommandHandler("get_latest_news", get_latest_news))
+dispatcher.add_handler(CommandHandler("start_monitoring_crypto", start_monitoring_crypto))
+dispatcher.add_handler(CallbackQueryHandler(callback_reply))
+dispatcher.add_handler(CommandHandler("check_movement", check_movement))
+
+updater.start_polling()

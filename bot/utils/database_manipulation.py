@@ -3,9 +3,6 @@ import datetime
 from database.create_session import create_session
 from models.article import Article
 from models.stocks import Stocks
-from models.users import Users
-from database.init_database import MAIN_ENGINE
-from sqlalchemy import select, update
 
 MONTH_MAPPER = {
     "Jan": 1,
@@ -63,41 +60,6 @@ def add_prices(prices, **kwargs):
     session.close()
 
 
-def add_user(chat_id):
-    """
-    Add new user by chat_id
-    """
-    session = create_session()
-    previous_user = session.execute(select(Users).filter_by(chat_id=chat_id)).first()
-    if previous_user is not None:
-        user_ = Users(chat_id=chat_id, monitor=0)
-        session.add(user_)
-        session.commit()
-    session.close()
-
-
-def get_monitor_state(chat_id):
-    """
-    Add new user by chat_id
-    """
-    session = create_session()
-    user_ = session.execute(select(Users).filter_by(chat_id=chat_id)).first()
-    print(user_)
-    monitor_state = user_[0].monitor
-    session.close()
-    return monitor_state
-
-
-def change_monitor_state(chat_id, new_monitor_state):
-    """
-    Add new user by chat_id
-    """
-    session = create_session()
-    session.execute(
-        update(Users).where(Users.chat_id == chat_id).values(monitor=new_monitor_state)
-    )
-    session.commit()
-    session.close()
 
 
 def retrieve_latest_news():
