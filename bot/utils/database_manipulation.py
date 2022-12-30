@@ -60,8 +60,6 @@ def add_prices(prices, **kwargs):
     session.close()
 
 
-
-
 def retrieve_latest_news():
     """
     Retrieve latest news from database
@@ -102,7 +100,10 @@ def retrieve_prices_n_minutes_back(n_minutes=10):
     Retrieve latest news from database
     """
     session = create_session()
-    prices = session.query(Stocks).order_by(Stocks.id.desc()).offset(n_minutes).first()
+    offset_entries = int(n_minutes / 5)
+    prices = (
+        session.query(Stocks).order_by(Stocks.id.desc()).offset(offset_entries).first()
+    )
     session.close()
     out_str = f"Prices {n_minutes} minutes back:\n"
     out_str += str(f"BTC {prices.BTC}\n")
