@@ -16,8 +16,8 @@ ssh-key
 # DS_Store
 .DS_Store
 
-# Poetry lock
-poetry.lock
+# Virtual environment
+.venv
 
 # Tests folder
 tests
@@ -26,4 +26,4 @@ tests
 .pytest_cache
 
 # setup info
-crypto_impact_bot.egg-info
+crypto_bot.egg-info
